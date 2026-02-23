@@ -2,7 +2,7 @@ import './env.js';
 import connectDb from './db/index.js';
 import { app } from './app.js';
 
-const port = process.env.PORT || 8000 || 5000;
+const port = process.env.PORT || 8000;
 
 await connectDb()
   .then(() => {

@@ -35,7 +35,6 @@ const destinationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-destinationSchema.index({ slug: 1 });
 destinationSchema.index({ category: 1 });
 destinationSchema.index({ name: 'text', state: 'text' });
 

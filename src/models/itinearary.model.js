@@ -84,8 +84,7 @@ const itinerarySchema = new mongoose.Schema({
   estimatedCostLuxury: { type: Number, default: null },
 }, { timestamps: true });
 
-itinerarySchema.index({ userId: 1, createdAt: -1 });
-itinerarySchema.index({ shareToken: 1 });
-itinerarySchema.index({ destinationId: 1 });
+itinerarySchema.index({ user: 1, createdAt: -1 });
+itinerarySchema.index({ destination: 1 });
 
 export default mongoose.model('Itinerary', itinerarySchema);
