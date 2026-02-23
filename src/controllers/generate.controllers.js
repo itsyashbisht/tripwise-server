@@ -1,111 +1,118 @@
-import { v4 as uuidv4 } from 'uuid';
 import Destination from '../models/destination.model.js';
 import Attraction from '../models/attraction.model.js';
 import Restaurant from '../models/resturant.model.js';
 import Hotel from '../models/hotel.model.js';
 import Itinerary from '../models/itinearary.model.js';
-
-import { buildItineraryPrompt } from '../services/promptBuilder.js';
 import { generateItineraryAI } from '../services/itinearary.js';
 
-// ── POST /api/generate ───────────────────────────────────────
-// The core endpoint: calls GROQ AI → saves full itinerary → returns it
-export const generateItinerary = async (req, res, next) => {
+// ── POST /api/generate
+export const generateItinerary = async (req, res) => {
   try {
     const {
-      destination: destInput,
+      destination: destinationName,
       originCity,
       days,
       startDate,
       endDate,
       adults = 2,
       children = 0,
-      tier,
+      tier = 'standard',
       interests = [],
       dailyBudgetPerPerson = 3000,
     } = req.body;
     
-    // ── Validate required fields ─────────────────────────────
-    if (!destInput || !originCity || !days || !tier)
-      return res.status(400).json({ error: 'destination, originCity, days and tier are required.' });
-    
-    if (!['economy', 'standard', 'luxury'].includes(tier.toLowerCase()))
+    // ── Validate
+    if (!destinationName)
+      return res.status(400).json({ error: 'destination is required.' });
+    if (!originCity)
+      return res.status(400).json({ error: 'originCity is required.' });
+    if (!days || Number(days) < 1 || Number(days) > 30)
+      return res.status(400).json({ error: 'days must be between 1 and 30.' });
+    if (!['economy', 'standard', 'luxury'].includes((tier || '').toLowerCase()))
       return res.status(400).json({ error: 'tier must be economy, standard or luxury.' });
     
-    const normalTier = tier.toLowerCase();
+    const normalizedTier = tier.toLowerCase();
+    const destBaseName = destinationName.split(',')[0].trim();
     
-    // ── 1. Look up destination in DB ─────────────────────────
-    const destName = destInput.split(',')[0].trim();
+    // ── 1. Look up destination in DB ────────────────────────────────────────
     const destination = await Destination.findOne({
       isActive: true,
       $or: [
-        { name: { $regex: destName, $options: 'i' } },
-        { slug: destName.toLowerCase().replace(/\s+/g, '-') },
+        { slug: { $regex: destBaseName.toLowerCase().replace(/\s+/g, '-'), $options: 'i' } },
+        { name: { $regex: destBaseName, $options: 'i' } },
       ],
     });
     
+    let destinationId;
     let attractions = [];
     let restaurants = [];
     let hotels = [];
     
     if (destination) {
-      [attractions, restaurants, hotels] = await Promise.all([
+      destinationId = destination._id;
+      // Load real DB data for this destination — feeds into the AI prompt for accuracy
+      ;[attractions, restaurants, hotels] = await Promise.all([
         Attraction.find({
-          destination: destination._id,
+          destinationId: destination._id,
           isActive: true
         }).limit(15).lean(),
         Restaurant.find({
-          destination: destination._id,
+          destinationId: destination._id,
           isActive: true
-        }).sort({
-          rating: -1
-        }).limit(10).lean(),
+        }).sort({ rating: -1 }).limit(10).lean(),
         Hotel.find({
-          destination: destination._id,
-          tier: normalTier,
-          isActive: true
+          destinationId: destination._id,
+          isActive: true,
+          tier: normalizedTier
         }).limit(5).lean(),
       ]);
+    } else {
+      // Unknown destination — auto-create placeholder so FK constraint doesn't break
+      destinationId = await createPlaceholderDestination(destinationName);
     }
     
-    // ── 2. Build prompt + call Claude ────────────────────────
-    const prompt = buildItineraryPrompt({
-      destination: destInput,
+    // ── 2. Build prompt and call Claude ─────────────────────────────────────
+    // callClaude now accepts a params object — builds the full prompt internally
+    // and returns { aiData, generationTimeMs, modelUsed }
+    const { aiData, generationTimeMs, modelUsed } = await generateItineraryAI({
+      destinationName,          // full string e.g. "Goa" or "Jaipur, Rajasthan"
       originCity,
       days: Number(days),
       adults: Number(adults),
       children: Number(children),
-      tier: normalTier,
-      interests,
+      tier: normalizedTier,
+      interests: Array.isArray(interests) ? interests : [],
       dailyBudgetPerPerson: Number(dailyBudgetPerPerson),
-      attractions,
+      attractions,              // real DB data (may be empty for unknown destinations)
       restaurants,
       hotels,
     });
     
-    const { aiData: aiResult, generationTimeMs, modelUsed } = await generateItineraryAI(prompt);
+    // ── 3. Map AI days/slots — preserve suggestions for food slots ───────────
+    const mappedDays = (aiData.days || []).map(day => ({
+      dayNumber: day.dayNumber,
+      date: startDate
+        ? new Date(new Date(startDate).getTime() + (day.dayNumber - 1) * 86400000)
+        : null,
+      title: day.title || `Day ${day.dayNumber}`,
+      summary: day.summary || null,
+      slots: (day.slots || []).map(slot => ({
+        slotOrder: slot.slotOrder || 1,
+        timeLabel: slot.timeLabel || null,
+        type: slot.type || 'attraction',
+        title: slot.title || 'Activity',
+        description: slot.description || null,
+        durationMins: slot.durationMins || null,
+        estimatedCost: slot.estimatedCost || 0,
+        aiTip: slot.aiTip || null,
+        // ← Crucial: food slots carry restaurant suggestions from AI
+        suggestions: Array.isArray(slot.suggestions) ? slot.suggestions : [],
+      })),
+    }));
     
-    // ── 3. Resolve or create destination document ────────────
-    let destinationId = destination?._id || null;
-    if (!destinationId) {
-      // Auto-create a minimal destination so itinerary has a ref
-      const slug = `${destName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`;
-      const newDest = await Destination.create({
-        name: destName,
-        slug,
-        state: destInput.split(',')[1]?.trim() || 'India',
-        category: 'Heritage',
-        description: `AI-generated destination: ${destInput}`,
-        heroImageUrl: 'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?auto=format&fit=crop&w=1920&q=90',
-        bestSeason: 'Oct–Mar',
-      });
-      destinationId = newDest._id;
-    }
-    
-    // ── 4. Build budget breakdown for all 3 tiers ────────────
+    // ── 4. Budget breakdown for all 3 tiers ─────────────────────────────────
     const budgetBreakdown = ['economy', 'standard', 'luxury'].map(t => {
-      console.log(aiResult);
-      const b = aiResult.budgetEstimate?.[t] || {};
+      const b = aiData.budgetEstimate?.[t] || {};
       return {
         tier: t,
         accommodation: b.accommodation || 0,
@@ -118,130 +125,125 @@ export const generateItinerary = async (req, res, next) => {
       };
     });
     
-    // ── 5. Build hotel refs from DB ───────────────────────────
-    const hotelEmbeds = hotels.slice(0, 3).map(h => ({
+    // ── 5. Hotel refs from DB (for populated response) ───────────────────────
+    const hotelRefs = hotels.slice(0, 3).map(h => ({
       hotel: h._id,
-      tier: normalTier,
-      pricePerNight: h.pricePerNight,
+      tier: normalizedTier,
+      pricePerNight: h.pricePerNight || 0,
       isSelected: true,
       checkIn: startDate ? new Date(startDate) : null,
       checkOut: endDate ? new Date(endDate) : null,
     }));
     
-    // ── 6. Build day + slot documents ────────────────────────
-    const dayDocs = (aiResult.days || []).map((day, di) => ({
-      dayNumber: day.dayNumber || di + 1,
-      date: startDate
-        ? new Date(new Date(startDate).getTime() + di * 86400000)
-        : null,
-      title: day.title || `Day ${di + 1}`,
-      summary: day.summary || '',
-      slots: (day.slots || []).map((slot, si) => ({
-        slotOrder: slot.slotOrder || si + 1,
-        timeLabel: slot.timeLabel || '',
-        type: slot.type || 'attraction',
-        title: slot.title || '',
-        description: slot.description || '',
-        durationMins: slot.durationMins || null,
-        estimatedCost: slot.estimatedCost || 0,
-        aiTip: slot.aiTip || '',
-      })),
-    }));
-    
-    // ── 7. Save full itinerary to MongoDB ────────────────────
+    // ── 6. Save to MongoDB ───────────────────────────────────────────────────
     const itinerary = await Itinerary.create({
-      user: req.user?._id || null,
+      user: req.user?.userId || null,
       destination: destinationId,
-      destinationName: destInput,
+      title: aiData.title || `${Number(days)}-Day ${destBaseName} Itinerary`,
       originCity,
-      title: aiResult.title || `${Number(days)}-Day ${destName} Itinerary`,
       totalDays: Number(days),
       startDate: startDate ? new Date(startDate) : null,
       endDate: endDate ? new Date(endDate) : null,
       adults: Number(adults),
       children: Number(children),
-      budgetTier: normalTier,
-      interests,
+      budgetTier: normalizedTier,
+      interests: Array.isArray(interests) ? interests : [],
       dailyBudgetPerPerson: Number(dailyBudgetPerPerson),
-      shareToken: uuidv4(),
       status: 'generated',
+      days: mappedDays,
+      hotels: hotelRefs,
+      budgetBreakdown,
+      travelTips: Array.isArray(aiData.travelTips) ? aiData.travelTips : [],
+      bestTimeToVisit: aiData.bestTimeToVisit || null,
+      localPhrases: Array.isArray(aiData.localPhrases) ? aiData.localPhrases : [],
       aiModelUsed: modelUsed,
       generationTimeMs,
-      estimatedCostEconomy: budgetBreakdown.find(b => b.tier === 'economy')?.total || null,
-      estimatedCostStandard: budgetBreakdown.find(b => b.tier === 'standard')?.total || null,
-      estimatedCostLuxury: budgetBreakdown.find(b => b.tier === 'luxury')?.total || null,
-      travelTips: aiResult.travelTips || [],
-      bestTimeToVisit: aiResult.bestTimeToVisit || '',
-      localPhrases: aiResult.localPhrases || [],
-      days: dayDocs,
-      hotels: hotelEmbeds,
-      budgetBreakdown,
+      estimatedCostEconomy: aiData.budgetEstimate?.economy?.total || null,
+      estimatedCostStandard: aiData.budgetEstimate?.standard?.total || null,
+      estimatedCostLuxury: aiData.budgetEstimate?.luxury?.total || null,
     });
     
-    // Populate hotels for response
-    await itinerary.populate('hotels.hotel', 'name imageUrl starRating pricePerNight rating amenities');
-    await itinerary.populate('destination', 'name slug heroImageUrl bestSeason');
+    // Populate for frontend response
+    await itinerary.populate('destination', 'name slug heroImageUrl state bestSeason');
+    await itinerary.populate('hotels.hotel');
     
+    // ── 7. Respond ───────────────────────────────────────────────────────────
     res.status(201).json({
       itinerary,
       shareUrl: `${process.env.FRONTEND_URL}/trip/${itinerary.shareToken}`,
       meta: {
         generationTimeMs,
         modelUsed,
-        travelTips: aiResult.travelTips || [],
-        bestTimeToVisit: aiResult.bestTimeToVisit || '',
-        localPhrases: aiResult.localPhrases || [],
-        hotelSuggestions: aiResult.hotelSuggestions || [],  // AI-only, not persisted to DB
+        travelTips: Array.isArray(aiData.travelTips) ? aiData.travelTips : [],
+        bestTimeToVisit: aiData.bestTimeToVisit || '',
+        localPhrases: Array.isArray(aiData.localPhrases) ? aiData.localPhrases : [],
+        // AI-generated hotel suggestions (richer than DB hotels — always destination-specific)
+        hotelSuggestions: Array.isArray(aiData.hotelSuggestions) ? aiData.hotelSuggestions : [],
       },
     });
-  } catch (err) { next(err); }
+    
+  } catch (err) {
+    console.error('[generateItinerary] Error:', err.message);
+    res.status(500).json({
+      error: err.message || 'AI generation failed. Please try again.',
+    });
+  }
 };
 
-// ── GET /api/generate/packages ───────────────────────────────
-// Instant math-based package pricing — no AI call needed
-export const getPackagePrices = async (req, res, next) => {
-  try {
-    const { days, adults, children = 0, dailyBudget = 3000 } = req.query;
-    
-    if (!days || !adults)
-      return res.status(400).json({ error: 'days and adults query params are required.' });
-    
-    const d = Number(days);
-    const a = Number(adults);
-    const c = Number(children);
-    const db = Number(dailyBudget);
-    const base = db * d * (a + c * 0.5);
-    
-    res.json({
-      packages: {
-        economy: {
-          perPerson: Math.round(base * 0.55 / a),
-          total: Math.round(base * 0.55),
-          multiplier: 0.55,
-          stay: 'Budget guesthouses & hostels',
-          transport: 'Trains, buses & shared cabs',
-          food: 'Dhabas & street food',
-          extras: ['Local guided walks', 'Street food trail', 'Budget temple visits'],
-        },
-        standard: {
-          perPerson: Math.round(base / a),
-          total: Math.round(base),
-          multiplier: 1.0,
-          stay: '3–4 star hotels & boutique havelis',
-          transport: 'Private cab + select trains',
-          food: 'Curated restaurants & local gems',
-          extras: ['Guided heritage tours', 'Curated dining picks', 'Comfortable AC transport'],
-        },
-        luxury: {
-          perPerson: Math.round(base * 2.3 / a),
-          total: Math.round(base * 2.3),
-          multiplier: 2.3,
-          stay: 'Heritage palaces & 5-star resorts',
-          transport: 'Chauffeur-driven luxury SUV',
-          food: 'Fine dining & private chef',
-          extras: ['Private heritage access', 'Spa & wellness daily', 'Exclusive local experiences'],
-        },
+// ── GET /api/generate/packages — instant math estimates, no AI
+export const getPackagePrices = (req, res) => {
+  const { days, adults, children = 0, dailyBudget = 3000 } = req.query;
+  
+  if (!days || !adults)
+    return res.status(400).json({ error: 'days and adults are required.' });
+  
+  const d = Number(days);
+  const a = Number(adults);
+  const c = Number(children);
+  const base = Number(dailyBudget) * d * (a + c * 0.5);
+  
+  res.json({
+    packages: {
+      economy: {
+        perPerson: Math.round(base * 0.55 / a),
+        total: Math.round(base * 0.55),
+        stay: 'Budget guesthouses & hostels',
+        transport: 'Trains, buses & shared cabs',
+        food: 'Dhabas & street food',
+        highlights: ['Local guided walks', 'Street food trail', 'Budget temple visits'],
       },
-    });
-  } catch (err) { next(err); }
+      standard: {
+        perPerson: Math.round(base / a),
+        total: Math.round(base),
+        stay: '3–4 star hotels & boutique havelis',
+        transport: 'Private cab + trains',
+        food: 'Curated restaurants & local gems',
+        highlights: ['Guided heritage tours', 'Curated dining picks', 'AC private transport'],
+      },
+      luxury: {
+        perPerson: Math.round(base * 2.3 / a),
+        total: Math.round(base * 2.3),
+        stay: 'Heritage palaces & 5-star resorts',
+        transport: 'Chauffeur-driven luxury SUV',
+        food: 'Fine dining & private chef',
+        highlights: ['Private heritage access', 'Spa & wellness daily', 'Exclusive local experiences'],
+      },
+    },
+  });
 };
+
+// ── Helper ────────────────────────────────────────────────────────────────────
+async function createPlaceholderDestination (nameStr) {
+  const name = (nameStr || '').split(',')[0].trim();
+  const slug = `${name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`;
+  const doc = await Destination.create({
+    name,
+    slug,
+    state: nameStr.split(',')[1]?.trim() || 'India',
+    category: 'Heritage',
+    description: `AI-generated destination: ${nameStr}`,
+    heroImageUrl: 'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?auto=format&fit=crop&w=1920&q=90',
+    bestSeason: 'Oct–Mar',
+  });
+  return doc._id;
+}

@@ -38,7 +38,8 @@ const budgetBreakdownSchema = new mongoose.Schema({
 
 // ── Hotel reference inside itinerary ──────────────────────
 const itineraryHotelSchema = new mongoose.Schema({
-  hotel: { type: mongoose.Schema.Types.ObjectId, ref: 'Hotel', required: true },
+  hotel: {
+    type: mongoose.Schema.Types.ObjectId, ref: 'Hotel', required: true },
   tier: { type: String, enum: ['economy', 'standard', 'luxury'] },
   pricePerNight: { type: Number, default: 0 },
   isSelected: { type: Boolean, default: true },

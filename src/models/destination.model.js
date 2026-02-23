@@ -1,4 +1,3 @@
-// models/Destination.js
 import mongoose from 'mongoose';
 
 const pricingSchema = new mongoose.Schema(

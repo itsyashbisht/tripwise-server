@@ -1,3 +1,5 @@
+// src/services/itinearary.js
+// Free AI via Groq (Llama 3.3 70B) — with real hotel + restaurant suggestions
 import Groq from 'groq-sdk';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -20,7 +22,7 @@ export async function generateItineraryAI ({
   const totalPax = adults + children * 0.5;
   const totalBudget = Math.round(dailyBudgetPerPerson * days * totalPax);
   
-  // ── Budget math
+  // ── Budget math ──────────────────────────────────────────────────────────
   const mult = { economy: 0.55, standard: 1.0, luxury: 2.3 };
   const ecoT = Math.round(totalBudget * mult.economy);
   const stdT = Math.round(totalBudget * mult.standard);
@@ -32,30 +34,35 @@ export async function generateItineraryAI ({
     standard: Math.round((dailyBudgetPerPerson * 0.45) * adults),
     luxury: Math.round((dailyBudgetPerPerson * 1.05) * adults),
   };
-  
   const mealBudgetPerPerson = {
     economy: Math.round(dailyBudgetPerPerson * 0.12),
     standard: Math.round(dailyBudgetPerPerson * 0.18),
     luxury: Math.round(dailyBudgetPerPerson * 0.28),
   };
-  
   const nightlyBudget = hotelNightlyBudget[tier] || hotelNightlyBudget.standard;
   const mealBudget = mealBudgetPerPerson[tier] || mealBudgetPerPerson.standard;
   
-  // ── Build context from real DB data
-  const attractionCtx = attractions.length ?
-    `REAL ATTRACTIONS (use these first):\n${attractions
-      .map(a => `- ${a.name} (${a.category}),
-    entry ₹${a.entryFee || 0}, ~${a.durationHours || 2}h`)
-      .join('\n')}` : '';
+  // ── Build context from real DB data ─────────────────────────────────────
+  const attractionCtx = attractions.length
+    ? `REAL ATTRACTIONS (use these first):\n${attractions
+      .map(a => `- ${a.name} (${a.category}), entry ₹${a.entryFee || 0}, ~${a.durationHours || 2}h`)
+      .join('\n')}`
+    : '';
   
-  const restaurantCtx = restaurants.length ? `REAL RESTAURANTS AT THIS DESTINATION (use these for food suggestions):\n${restaurants
-    .map(r => `- ${r.name} | ${r.cuisineType} | ${r.priceRange} | ~₹${r.pricePerPerson || 300}/person | ${r.isVeg ? 'Veg' : 'Non-veg'}`)
-    .join('\n')}` : '';
+  const restaurantCtx = restaurants.length
+    ? `REAL RESTAURANTS AT THIS DESTINATION (use these for food suggestions):\n${restaurants
+      .map(r => `- ${r.name} | ${r.cuisineType} | ${r.priceRange} | ~₹${r.pricePerPerson || 300}/person | ${r.isVeg ? 'Veg' : 'Non-veg'}`)
+      .join('\n')}`
+    : '';
   
-  const hotelCtx = hotels.length ? `REAL HOTELS AT THIS DESTINATION (use these for hotel suggestions):\n${hotels
-    .map(h => `- ${h.name} | ₹${h.pricePerNight || 0}/night | ${h.tier} tier | ${h.rating || '4'}★`)
-    .join('\n')}` : '';
+  const hotelCtx = hotels.length
+    ? `REAL HOTELS AT THIS DESTINATION (use these for hotel suggestions):\n${hotels
+      .map(h => `- ${h.name} | ₹${h.pricePerNight || 0}/night | ${h.tier} tier | ${h.rating || '4'}★`)
+      .join('\n')}`
+    : '';
+  
+  // Guard: destinationName can be undefined if controller didn't pass it — never crash on .split()
+  const destShortName = (destinationName || 'the destination').split(',')[0].trim();
   
   const systemPrompt = `You are TripWise, an expert Indian travel planner.
 You ALWAYS respond with valid raw JSON only.
@@ -88,7 +95,7 @@ CRITICAL RULES:
 Return ONLY this JSON:
 
 {
-  "title": "catchy trip title",
+  "title": "REQUIRED: a catchy title that explicitly names ${destShortName} — e.g. 'Sun, Sand & Spice: Goa in 4 Days' or 'Royal Rajputana: 3 Days in Jaipur'",
   "bestTimeToVisit": "months e.g. October to March",
   "travelTips": ["tip1", "tip2", "tip3", "tip4", "tip5"],
   "localPhrases": [
@@ -262,22 +269,20 @@ Return ONLY this JSON:
   ]
 }
 
-Generate all ${days} days with realistic named places for ${destinationName}.
-Every food slot MUST have 2-3 named restaurant suggestions.
-Hotels in hotelSuggestions must be real or plausible named properties for ${destinationName}.
-Do not use generic names like "Local Restaurant" or "Budget Hotel". Use real or realistic specific names.`;
+STRICT RULES — follow ALL of these:
+1. Generate ALL ${days} days (dayNumber 1 through ${days}). Never generate fewer days.
+2. The "title" field MUST contain the word "${destShortName}" — never use another city name.
+3. Every food slot MUST have 2-3 named restaurant suggestions specific to ${destinationName}.
+4. Hotels in hotelSuggestions must be named properties located in ${destinationName}.
+5. Attractions and landmarks must be real places IN ${destinationName} — not from other cities.
+6. Never use generic names like "Local Restaurant" or "Budget Hotel".`;
   
   const completion = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
-      {
-        role: 'system',
-        content: systemPrompt
-      },
-      {
-        role: 'user',
-        content: userPrompt
-      },],
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
     temperature: 0.72,
     max_tokens: 8000,
     response_format: { type: 'json_object' },
