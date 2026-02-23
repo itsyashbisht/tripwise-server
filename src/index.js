@@ -1,4 +1,4 @@
-import '../env.js';
+import './env.js';
 import connectDb from './db/index.js';
 import { app } from './app.js';
 
