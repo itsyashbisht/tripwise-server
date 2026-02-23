@@ -2,6 +2,8 @@ import './env.js';
 import connectDb from './db/index.js';
 import { app } from './app.js';
 
+const port = process.env.PORT || 8000 || 5000;
+
 await connectDb()
   .then(() => {
     app.on(
@@ -9,8 +11,8 @@ await connectDb()
         console.error('Error: ', error.message);
         throw error;
       });
-    app.listen(process.env.PORT || 8000, () => {
-      console.log('Server is running at port' + process.env.PORT);
+    app.listen(port, () => {
+      console.log('Server is running at port' + port);
     });
     
   }).catch((err) => {
