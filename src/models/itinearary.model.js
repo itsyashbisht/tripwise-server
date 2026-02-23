@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-// ── Slot (single activity inside a day) ───────────────────
+// ── Slot (single activity inside a day)
 const slotSchema = new mongoose.Schema({
   slotOrder: { type: Number, required: true },
   timeLabel: { type: String, default: null },
@@ -15,7 +15,7 @@ const slotSchema = new mongoose.Schema({
   mapLng: { type: Number, default: null },
 }, { _id: true });
 
-// ── Day (contains multiple slots) ─────────────────────────
+// ── Day (contains multiple slots)
 const daySchema = new mongoose.Schema({
   dayNumber: { type: Number, required: true },
   date: { type: Date, default: null },
