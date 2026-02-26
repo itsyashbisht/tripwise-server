@@ -1,4 +1,4 @@
-export function buildItineraryPrompt ({
+export function buildItineraryPrompt({
   destination,
   originCity,
   days,
@@ -11,36 +11,55 @@ export function buildItineraryPrompt ({
   restaurants = [],
   hotels = [],
 }) {
-  const pax = `${adults} adult${adults > 1 ? 's' : ''}${
-    children > 0 ? ` and ${children} child${children > 1 ? 'ren' : ''}` : ''
+  const pax = `${adults} adult${adults > 1 ? "s" : ""}${
+    children > 0 ? ` and ${children} child${children > 1 ? "ren" : ""}` : ""
   }`;
 
   const tierDesc = {
-    economy: 'budget-friendly — local transport, guesthouses, street food and dhabas. Value for money.',
-    standard: 'comfortable — 3–4 star hotels, private transport, curated mid-range restaurants.',
-    luxury: 'premium — heritage palace hotels, chauffeur SUV, fine dining, private guides, exclusive experiences.',
+    economy:
+      "budget-friendly — local transport, guesthouses, street food and dhabas. Value for money.",
+    standard:
+      "comfortable — 3–4 star hotels, private transport, curated mid-range restaurants.",
+    luxury:
+      "premium — heritage palace hotels, chauffeur SUV, fine dining, private guides, exclusive experiences.",
   }[tier];
 
   // Real data blocks (from MongoDB)
-  const attractionBlock = attractions.length > 0
-    ? attractions.slice(0, 12).map(a =>
-      `  • ${a.name} (${a.category}) | Entry ₹${a.entryFeeIndian} Indians / ₹${a.entryFeeForeign} foreign | ~${a.visitDurationMins} min | Tip: "${a.insiderTip || 'n/a'}"`
-    ).join('\n')
-    : '  (No DB data — use your knowledge of this destination)';
+  const attractionBlock =
+    attractions.length > 0
+      ? attractions
+          .slice(0, 12)
+          .map(
+            (a) =>
+              `  • ${a.name} (${a.category}) | Entry ₹${a.entryFeeIndian} Indians / ₹${a.entryFeeForeign} foreign | ~${a.visitDurationMins} min | Tip: "${a.insiderTip || "n/a"}"`,
+          )
+          .join("\n")
+      : "  (No DB data — use your knowledge of this destination)";
 
-  const restaurantBlock = restaurants.length > 0
-    ? restaurants.slice(0, 8).map(r =>
-      `  • ${r.name} | ${r.cuisineType} | ₹${r.pricePerPerson}/person | ${r.isVeg ? 'Veg 🟢' : 'Non-Veg 🔴'} | Must try: ${r.mustTryDishes || '—'}`
-    ).join('\n')
-    : '  (No DB data — suggest well-known restaurants for this destination)';
+  const restaurantBlock =
+    restaurants.length > 0
+      ? restaurants
+          .slice(0, 8)
+          .map(
+            (r) =>
+              `  • ${r.name} | ${r.cuisineType} | ₹${r.pricePerPerson}/person | ${r.isVeg ? "Veg 🟢" : "Non-Veg 🔴"} | Must try: ${r.mustTryDishes || "—"}`,
+          )
+          .join("\n")
+      : "  (No DB data — suggest well-known restaurants for this destination)";
 
-  const hotelBlock = hotels.length > 0
-    ? hotels.slice(0, 4).map(h =>
-      `  • ${h.name} | ₹${h.pricePerNight}/night | ${h.starRating}★ | Rating: ${h.rating}`
-    ).join('\n')
-    : '  (No DB data — suggest appropriate hotels for this tier and destination)';
+  const hotelBlock =
+    hotels.length > 0
+      ? hotels
+          .slice(0, 4)
+          .map(
+            (h) =>
+              `  • ${h.name} | ₹${h.pricePerNight}/night | ${h.starRating}★ | Rating: ${h.rating}`,
+          )
+          .join("\n")
+      : "  (No DB data — suggest appropriate hotels for this tier and destination)";
 
-  const interestStr = interests?.length > 0 ? interests.join(', ') : 'General sightseeing';
+  const interestStr =
+    interests?.length > 0 ? interests.join(", ") : "General sightseeing";
 
   return `You are TripWise AI, India's most knowledgeable and detail-oriented travel planner.
 
@@ -84,7 +103,7 @@ INSTRUCTIONS
    - economy  → shared transport, guesthouses, street food, free/cheap entry spots
    - standard → private cabs, 3–4 star hotels, curated restaurants
    - luxury   → private experiences, palace hotels, fine dining, exclusive access
-7. budgetEstimate must be realistic in INR for the FULL trip (not per day) for ${adults} adults${children > 0 ? ` + ${children} children` : ''}.
+7. budgetEstimate must be realistic in INR for the FULL trip (not per day) for ${adults} adults${children > 0 ? ` + ${children} children` : ""}.
 8. Respond ONLY with valid JSON — no markdown, no code fences, no explanation text outside the JSON.
 
 ═══════════════════════════════════════════

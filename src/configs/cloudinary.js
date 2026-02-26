@@ -1,5 +1,5 @@
-import { v2 as cloudinary } from './cloudinary';
-import fs from 'fs';
+import { v2 as cloudinary } from "./cloudinary";
+import fs from "fs";
 
 // CONFIG.
 cloudinary.config({
@@ -11,9 +11,10 @@ cloudinary.config({
 const uploadOnCloudinary = async (localFilePath) => {
   try {
     if (!uploadOnCloudinary) return null;
-    const response = await cloudinary.uploader.upload(localFilePath, {
-      resource_type: 'auto',
-    })
+    const response = await cloudinary.uploader
+      .upload(localFilePath, {
+        resource_type: "auto",
+      })
       .catch((error) => {
         console.error(error);
       });
@@ -26,4 +27,3 @@ const uploadOnCloudinary = async (localFilePath) => {
     return null;
   }
 };
-

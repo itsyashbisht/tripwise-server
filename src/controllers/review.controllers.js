@@ -1,5 +1,5 @@
-import Review from '../models/review.model.js';
-import Destination from '../models/destination.model.js';
+import Review from "../models/review.model.js";
+import Destination from "../models/destination.model.js";
 
 // ── GET /api/reviews?destinationId=xxx ───────────────────────────────────────
 export const getReviews = async (req, res) => {
@@ -11,9 +11,9 @@ export const getReviews = async (req, res) => {
 
     const [reviews, total] = await Promise.all([
       Review.find(filter)
-        .populate('userId', 'name avatar')
-        .populate('destinationId', 'name slug')
-        .select('-__v')
+        .populate("userId", "name avatar")
+        .populate("destinationId", "name slug")
+        .select("-__v")
         .sort({ createdAt: -1 })
         .skip(Number(offset))
         .limit(Number(limit)),
@@ -24,16 +24,24 @@ export const getReviews = async (req, res) => {
     let avgRating = null;
     if (destinationId) {
       const agg = await Review.aggregate([
-        { $match: { destinationId: new (await import('mongoose')).default.Types.ObjectId(destinationId) } },
-        { $group: { _id: null, avg: { $avg: '$rating' }, count: { $sum: 1 } } },
+        {
+          $match: {
+            destinationId: new (
+              await import("mongoose")
+            ).default.Types.ObjectId(destinationId),
+          },
+        },
+        { $group: { _id: null, avg: { $avg: "$rating" }, count: { $sum: 1 } } },
       ]);
-      avgRating = agg[0] ? { avg: Math.round(agg[0].avg * 10) / 10, count: agg[0].count } : null;
+      avgRating = agg[0]
+        ? { avg: Math.round(agg[0].avg * 10) / 10, count: agg[0].count }
+        : null;
     }
 
     res.json({ reviews, total, avgRating });
   } catch (err) {
-    console.error('[getReviews]', err.message);
-    res.status(500).json({ error: 'Failed to fetch reviews.' });
+    console.error("[getReviews]", err.message);
+    res.status(500).json({ error: "Failed to fetch reviews." });
   }
 };
 
@@ -42,12 +50,14 @@ export const createReview = async (req, res) => {
   try {
     const { destinationId, itineraryId, rating, comment, tripDate } = req.body;
 
-    if (!destinationId) return res.status(400).json({ error: 'destinationId is required.' });
+    if (!destinationId)
+      return res.status(400).json({ error: "destinationId is required." });
     if (!rating || rating < 1 || rating > 5)
-      return res.status(400).json({ error: 'rating must be between 1 and 5.' });
+      return res.status(400).json({ error: "rating must be between 1 and 5." });
 
     const destination = await Destination.findById(destinationId);
-    if (!destination) return res.status(404).json({ error: 'Destination not found.' });
+    if (!destination)
+      return res.status(404).json({ error: "Destination not found." });
 
     const review = await Review.create({
       userId: req.user.userId,
@@ -58,11 +68,11 @@ export const createReview = async (req, res) => {
       tripDate: tripDate ? new Date(tripDate) : null,
     });
 
-    await review.populate('userId', 'name avatar');
+    await review.populate("userId", "name avatar");
     res.status(201).json({ review });
   } catch (err) {
-    console.error('[createReview]', err.message);
-    res.status(500).json({ error: 'Failed to create review.' });
+    console.error("[createReview]", err.message);
+    res.status(500).json({ error: "Failed to create review." });
   }
 };
 
@@ -70,14 +80,14 @@ export const createReview = async (req, res) => {
 export const deleteReview = async (req, res) => {
   try {
     const review = await Review.findById(req.params.id);
-    if (!review) return res.status(404).json({ error: 'Review not found.' });
-    if (String(review.userId) !== req.user.userId && req.user.role !== 'admin')
-      return res.status(403).json({ error: 'Not your review.' });
+    if (!review) return res.status(404).json({ error: "Review not found." });
+    if (String(review.userId) !== req.user.userId && req.user.role !== "admin")
+      return res.status(403).json({ error: "Not your review." });
 
     await Review.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Review deleted.' });
+    res.json({ message: "Review deleted." });
   } catch (err) {
-    console.error('[deleteReview]', err.message);
-    res.status(500).json({ error: 'Failed to delete review.' });
+    console.error("[deleteReview]", err.message);
+    res.status(500).json({ error: "Failed to delete review." });
   }
 };

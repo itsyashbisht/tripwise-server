@@ -1,14 +1,28 @@
-// models/Attraction.js
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 const attractionSchema = new mongoose.Schema(
   {
-    destinationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Destination', required: true },
+    destinationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Destination",
+      required: true,
+    },
     name: { type: String, required: true, trim: true },
     category: {
       type: String,
-      enum: ['Fort', 'Palace', 'Temple', 'Beach', 'Museum', 'Market', 'Nature', 'Adventure', 'Lake', 'Monument'],
-      required: true
+      enum: [
+        "Fort",
+        "Palace",
+        "Temple",
+        "Beach",
+        "Museum",
+        "Market",
+        "Nature",
+        "Adventure",
+        "Lake",
+        "Monument",
+      ],
+      required: true,
     },
     description: { type: String, required: true },
     imageUrl: { type: String, default: null },
@@ -25,10 +39,10 @@ const attractionSchema = new mongoose.Schema(
     insiderTip: { type: String, default: null },
     isActive: { type: Boolean, default: true },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 attractionSchema.index({ destinationId: 1 });
 attractionSchema.index({ category: 1 });
 
-export default mongoose.model('Attraction', attractionSchema);
+export default mongoose.model("Attraction", attractionSchema);

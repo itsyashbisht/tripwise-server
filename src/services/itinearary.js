@@ -1,10 +1,8 @@
-// src/services/itinearary.js
-// Free AI via Groq (Llama 3.3 70B) — with real hotel + restaurant suggestions
-import Groq from 'groq-sdk';
+import Groq from "groq-sdk";
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-export async function generateItineraryAI ({
+export async function generateItineraryAI({
   destinationName,
   originCity,
   days,
@@ -18,21 +16,21 @@ export async function generateItineraryAI ({
   hotels = [],
 }) {
   const start = Date.now();
-  
+
   const totalPax = adults + children * 0.5;
   const totalBudget = Math.round(dailyBudgetPerPerson * days * totalPax);
-  
+
   // ── Budget math ──────────────────────────────────────────────────────────
   const mult = { economy: 0.55, standard: 1.0, luxury: 2.3 };
   const ecoT = Math.round(totalBudget * mult.economy);
   const stdT = Math.round(totalBudget * mult.standard);
   const luxT = Math.round(totalBudget * mult.luxury);
-  
+
   // Budget-aware hotel price range for the selected tier
   const hotelNightlyBudget = {
-    economy: Math.round((dailyBudgetPerPerson * 0.40) * adults),
-    standard: Math.round((dailyBudgetPerPerson * 0.45) * adults),
-    luxury: Math.round((dailyBudgetPerPerson * 1.05) * adults),
+    economy: Math.round(dailyBudgetPerPerson * 0.4 * adults),
+    standard: Math.round(dailyBudgetPerPerson * 0.45 * adults),
+    luxury: Math.round(dailyBudgetPerPerson * 1.05 * adults),
   };
   const mealBudgetPerPerson = {
     economy: Math.round(dailyBudgetPerPerson * 0.12),
@@ -41,35 +39,46 @@ export async function generateItineraryAI ({
   };
   const nightlyBudget = hotelNightlyBudget[tier] || hotelNightlyBudget.standard;
   const mealBudget = mealBudgetPerPerson[tier] || mealBudgetPerPerson.standard;
-  
+
   // ── Build context from real DB data ─────────────────────────────────────
   const attractionCtx = attractions.length
     ? `REAL ATTRACTIONS (use these first):\n${attractions
-      .map(a => `- ${a.name} (${a.category}), entry ₹${a.entryFee || 0}, ~${a.durationHours || 2}h`)
-      .join('\n')}`
-    : '';
-  
+        .map(
+          (a) =>
+            `- ${a.name} (${a.category}), entry ₹${a.entryFee || 0}, ~${a.durationHours || 2}h`,
+        )
+        .join("\n")}`
+    : "";
+
   const restaurantCtx = restaurants.length
     ? `REAL RESTAURANTS AT THIS DESTINATION (use these for food suggestions):\n${restaurants
-      .map(r => `- ${r.name} | ${r.cuisineType} | ${r.priceRange} | ~₹${r.pricePerPerson || 300}/person | ${r.isVeg ? 'Veg' : 'Non-veg'}`)
-      .join('\n')}`
-    : '';
-  
+        .map(
+          (r) =>
+            `- ${r.name} | ${r.cuisineType} | ${r.priceRange} | ~₹${r.pricePerPerson || 300}/person | ${r.isVeg ? "Veg" : "Non-veg"}`,
+        )
+        .join("\n")}`
+    : "";
+
   const hotelCtx = hotels.length
     ? `REAL HOTELS AT THIS DESTINATION (use these for hotel suggestions):\n${hotels
-      .map(h => `- ${h.name} | ₹${h.pricePerNight || 0}/night | ${h.tier} tier | ${h.rating || '4'}★`)
-      .join('\n')}`
-    : '';
-  
+        .map(
+          (h) =>
+            `- ${h.name} | ₹${h.pricePerNight || 0}/night | ${h.tier} tier | ${h.rating || "4"}★`,
+        )
+        .join("\n")}`
+    : "";
+
   // Guard: destinationName can be undefined if controller didn't pass it — never crash on .split()
-  const destShortName = (destinationName || 'the destination').split(',')[0].trim();
-  
+  const destShortName = (destinationName || "the destination")
+    .split(",")[0]
+    .trim();
+
   const systemPrompt = `You are TripWise, an expert Indian travel planner.
 You ALWAYS respond with valid raw JSON only.
 No markdown, no backticks, no prose — ONLY the JSON object.
 All number values must be plain integers, not strings.`;
-  
-  const userPrompt = `Generate a complete ${days}-day travel itinerary for ${adults} adults${children > 0 ? ` and ${children} children` : ''}.
+
+  const userPrompt = `Generate a complete ${days}-day travel itinerary for ${adults} adults${children > 0 ? ` and ${children} children` : ""}.
 
 TRIP DETAILS:
 - Destination: ${destinationName}
@@ -79,7 +88,7 @@ TRIP DETAILS:
 - Daily budget per person: ₹${dailyBudgetPerPerson}
 - Total hotel budget per night: ~₹${nightlyBudget} (for all ${adults} adults)
 - Meal budget per person per meal: ~₹${mealBudget}
-- Interests: ${interests && interests.length ? interests.join(', ') : 'culture, food, sightseeing'}
+- Interests: ${interests && interests.length ? interests.join(", ") : "culture, food, sightseeing"}
 
 ${attractionCtx}
 ${restaurantCtx}
@@ -105,10 +114,10 @@ Return ONLY this JSON:
   ],
   "budgetEstimate": {
     "economy": {
-      "accommodation": ${Math.round(ecoT * 0.40)},
+      "accommodation": ${Math.round(ecoT * 0.4)},
       "food": ${Math.round(ecoT * 0.25)},
-      "transport": ${Math.round(ecoT * 0.20)},
-      "entryFees": ${Math.round(ecoT * 0.10)},
+      "transport": ${Math.round(ecoT * 0.2)},
+      "entryFees": ${Math.round(ecoT * 0.1)},
       "misc": ${Math.round(ecoT * 0.05)},
       "total": ${ecoT},
       "perPerson": ${Math.round(ecoT / adults)}
@@ -116,7 +125,7 @@ Return ONLY this JSON:
     "standard": {
       "accommodation": ${Math.round(stdT * 0.42)},
       "food": ${Math.round(stdT * 0.25)},
-      "transport": ${Math.round(stdT * 0.20)},
+      "transport": ${Math.round(stdT * 0.2)},
       "entryFees": ${Math.round(stdT * 0.08)},
       "misc": ${Math.round(stdT * 0.05)},
       "total": ${stdT},
@@ -276,44 +285,47 @@ STRICT RULES — follow ALL of these:
 4. Hotels in hotelSuggestions must be named properties located in ${destinationName}.
 5. Attractions and landmarks must be real places IN ${destinationName} — not from other cities.
 6. Never use generic names like "Local Restaurant" or "Budget Hotel".`;
-  
+
   const completion = await groq.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
+    model: "llama-3.3-70b-versatile",
     messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
     ],
     temperature: 0.72,
     max_tokens: 8000,
-    response_format: { type: 'json_object' },
+    response_format: { type: "json_object" },
   });
-  
+
   const raw = completion.choices[0].message.content;
-  
+
   let aiData;
   try {
     aiData = JSON.parse(raw);
   } catch (parseErr) {
-    console.error('[generateItineraryAI] JSON parse failed:', raw.slice(0, 400));
-    throw new Error('AI returned invalid JSON. Please try again.');
+    console.error(
+      "[generateItineraryAI] JSON parse failed:",
+      raw.slice(0, 400),
+    );
+    throw new Error("AI returned invalid JSON. Please try again.");
   }
-  
+
   if (!aiData.days || !Array.isArray(aiData.days) || aiData.days.length === 0) {
-    throw new Error('AI did not return any days. Please try again.');
+    throw new Error("AI did not return any days. Please try again.");
   }
-  
+
   // Ensure every slot has a suggestions array
-  aiData.days.forEach(day => {
-    day.slots?.forEach(slot => {
+  aiData.days.forEach((day) => {
+    day.slots?.forEach((slot) => {
       if (!slot.suggestions) slot.suggestions = [];
     });
   });
-  
+
   if (!aiData.hotelSuggestions) aiData.hotelSuggestions = [];
-  
+
   return {
     aiData,
     generationTimeMs: Date.now() - start,
-    modelUsed: 'groq/llama-3.3-70b-versatile',
+    modelUsed: "groq/llama-3.3-70b-versatile",
   };
 }
