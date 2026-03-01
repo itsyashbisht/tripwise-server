@@ -1,97 +1,129 @@
-# tripwise-server
+﻿# tripsage-server
 
-A backend REST API for the TripWise travel planning application. The server is built with Node.js, Express, and MongoDB and provides endpoints for user authentication, destination management, itinerary generation, hotels, restaurants, reviews, and saved plans.
+Backend REST API for **Tripsage**, an AI-powered travel planner.
 
-## ⚙️ Features
+This service handles authentication, destinations, hotels, restaurants, reviews, itinerary creation, and AI-assisted trip planning.
 
-- JWT-based user authentication (signup/login)
-- CRUD operations for destinations, hotels, restaurants, and itineraries
-- Automated itinerary generation using GPT-powered services
-- Review system with ratings for attractions and services
-- Saving and retrieving personalized travel plans
-- Middleware for error handling and authentication
+## Features
 
-## 🛠️ Tech Stack
+- JWT auth with access and refresh tokens
+- CRUD support for travel entities (destinations, hotels, restaurants, itineraries, reviews)
+- AI-generated itinerary workflows
+- Shareable trip links
+- Cloudinary integration for media handling
+- Email utility support for notification/verification flows
 
-- Node.js & Express
-- MongoDB & Mongoose
-- Cloudinary for media uploads
-- OpenAI / GPT integration for itinerary generation
+## Tech Stack
 
-## 🚀 Getting Started
+- Node.js (ESM)
+- Express
+- MongoDB + Mongoose
+- Groq SDK (AI generation)
+- Cloudinary
+- Nodemailer
+
+## Getting Started
 
 ### Prerequisites
 
-- Node.js (>=14)
-- MongoDB instance (local or Atlas)
+- Node.js 18+
+- MongoDB (Atlas or local)
 
-### Installation
+### Install
 
 ```bash
-git clone https://github.com/yourusername/tripwise-server.git
-cd tripwise-server
 npm install
 ```
 
-### Configuration
+### Environment Variables
 
-Copy `.env.example` to `.env` and fill in the required values:
+Create a `.env` file in the project root:
 
+```env
+PORT=8000
+CORS_ORIGIN=http://localhost:5173
+FRONTEND_URL=http://localhost:5173
+
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>
+
+ACCESS_TOKEN_SECRET=replace_me
+ACCESS_TOKEN_EXPIRY=1d
+REFRESH_TOKEN_SECRET=replace_me
+REFRESH_TOKEN_EXPIRY=7d
+
+GROQ_API_KEY=replace_me
+
+CLOUDINARY_CLOUD_NAME=replace_me
+CLOUDINARY_API_KEY=replace_me
+CLOUDINARY_API_SECRET=replace_me
+
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=replace_me
+SMTP_PASS=replace_me
 ```
-PORT=5000
-MONGO_URI=<your_mongodb_uri>
-JWT_SECRET=<your_jwt_secret>
-CLOUDINARY_CLOUD_NAME=<name>
-CLOUDINARY_API_KEY=<key>
-CLOUDINARY_API_SECRET=<secret>
-OPENAI_API_KEY=<key>
-```
 
-### Running the server
+Notes:
+- The database connection currently appends `/tripSage` in code when connecting.
+- `FRONTEND_URL` is used when building share links and email URLs.
+
+### Run
 
 ```bash
-npm run dev      # starts nodemon for development
-npm start         # production mode
+npm run dev
 ```
 
-## 📁 Project Structure
+Production:
 
+```bash
+npm start
 ```
+
+## Scripts
+
+- `npm run dev` - Start dev server with nodemon
+- `npm start` - Start production server
+- `npm run seed` - Seed data using `scripts/seed.js`
+- `npm run build` - Placeholder build script
+
+## API Base URL
+
+`http://localhost:8000/api/v1`
+
+## Route Groups
+
+- `/auth`
+- `/users`
+- `/destinations`
+- `/hotels`
+- `/restaurants`
+- `/itineraries`
+- `/generate`
+- `/reviews`
+
+Protected endpoints require:
+
+`Authorization: Bearer <access_token>`
+
+## Project Structure
+
+```text
 src/
-  app.js             - Express app setup
-  index.js           - Server entry point
-  configs/           - Configuration helpers
-  controllers/       - Request handlers
-  db/                - MongoDB connection
-  middlewares/       - Custom middleware
-  models/            - Mongoose schemas
-  routes/            - Express routers
-  services/          - Business logic & external APIs
-  utils/             - Utility helpers
+  app.js            # Express app + middleware + routes
+  index.js          # Server bootstrap
+  configs/          # External service config (Cloudinary, etc.)
+  controllers/      # Route handlers
+  db/               # MongoDB connection
+  middlewares/      # Auth and common middleware
+  models/           # Mongoose models
+  routes/           # API route modules
+  services/         # AI/email and other services
+  utils/            # Shared helpers
+scripts/
+  seed.js           # Seed script
 ```
 
-## 🧩 API Overview
+## Status
 
-See the route files under `src/routes` for available endpoints. Some key routes include:
-
-- `POST /api/v1/auth/signup` & `/login`
-- `GET/POST/PUT/DELETE /api/v1/destinations`
-- `POST /api/v1/generate` - generate itineraries
-- `GET/POST /api/v1/hotels`, `/restaurants`, `/reviews`
-- Protected routes require an `Authorization: Bearer <token>` header.
-
-Detailed API documentation is a work in progress.
-
-## 📝 Scripts
-
-- `npm run dev` - start development server
-- `npm start` - start production server
-- `npm run seed` - seed database with sample data (see `scripts/seed.js`)
-
-## 🤝 Contributing
-
-Contributions are welcome! Please open issues or pull requests.
-
-## 📄 License
-
-This project is licensed under the MIT License.
+This README now reflects the current **tripsage** backend setup. If you want, I can also add endpoint-level API docs (request/response examples) in a follow-up.
